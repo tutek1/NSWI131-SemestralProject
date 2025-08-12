@@ -1,0 +1,88 @@
+#include "ShaderUtils.hlsl"
+#pragma kernel CSMain
+
+// Input and output textures
+Texture2D<float4> _sourceTex;
+RWTexture2D<float4> _distTex;
+RWTexture2D<float4> _srcBlurTex;
+
+Buffer<float> _gaussianKernel;
+
+int _blurRadius;
+float _slopePercentageBorder;
+bool _doSourceBlur;
+bool _doDistMap;
+
+
+void DistanceTexture(uint3 id : SV_DispatchThreadID, Texture2D<float4> srcTex, RWTexture2D<float4> destTex)
+{
+    uint2 texSize;
+    srcTex.GetDimensions(texSize.x, texSize.y);
+
+    int2 coords = id.xy;
+    int pixelDistance = round(texSize.x * _slopePercentageBorder);
+    if (pixelDistance < 1) pixelDistance = 1.0;
+    float minDistance = pixelDistance * 3.0;
+
+    // Adaptive stepsize - in large textures sampling every pixel is costly with diminishing returns
+    int stepSize = clamp(round(texSize.x / 768.0), 1, 10);
+
+    // Precalculate bounds to avoid branching
+    int minX = max(0, coords.x - pixelDistance);
+    int maxX = min(texSize.x - 1, coords.x + pixelDistance);
+    int minY = max(0, coords.y - pixelDistance);
+    int maxY = min(texSize.y - 1, coords.y + pixelDistance);
+    for (int xRect = minX; xRect <= maxX; xRect+=stepSize)
+    {
+        for (int yRect = minY; yRect <= maxY; yRect+=stepSize)
+        {
+            int2 currCoords = int2(xRect, yRect);
+
+            // Found the edge
+            if (srcTex[currCoords].a < 0.01)
+            {
+                float dist = distance(currCoords, coords);
+                minDistance = min(minDistance, dist);
+            }
+        }
+
+        // Break early if this we are on the edge
+        if (minDistance < 1.5)
+        {
+            break;
+        }
+    }
+
+    // Get the color
+    float heightValue = 1 - clamp(minDistance / pixelDistance, 0, 1);
+    float4 heightColor = float4(heightValue, heightValue, heightValue, 1);
+
+    destTex[coords] = heightColor;
+}
+
+[numthreads(16, 16, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint2 texSize;
+    _sourceTex.GetDimensions(texSize.x, texSize.y);
+
+    // Only draw to pixels in range of texture (just in case check)
+    if (id.x >= texSize.x) return;
+    if (id.x < 0) return;
+    if (id.y >= texSize.y) return;
+    if (id.y < 0) return;
+
+    // Check if the pixel is even visible
+    if (_sourceTex[id.xy].a <= 0.01)
+    {
+        _srcBlurTex[id.xy] = float4(0, 0, 0, 0);
+        _distTex[id.xy] = float4(1, 1, 1, 1);
+        return;
+    } 
+
+    // _doSourceBlur and doDistMap present only for stage testing
+    if (_doSourceBlur) GaussianBlurTexture(id, _sourceTex, _srcBlurTex, _gaussianKernel, _blurRadius, true);
+    if (_doDistMap) DistanceTexture(id, _sourceTex, _distTex);
+}
+
+

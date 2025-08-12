@@ -1,0 +1,64 @@
+#pragma kernel CSMain
+
+// Input and output textures
+Texture2D<float4> _sourceTex;
+RWTexture2D<float4> _resultTex;
+Buffer<float> _gaussianKernel;
+
+int _blurRadius;
+
+// Applies gamma correction from Linear to sRGB color space
+float3 LinearToSRGB(float3 linearCol)
+{
+    float3 srgbLo  = linearCol * 12.92;
+    float3 srgbHi = 1.055 * pow(abs(linearCol), 1.0/2.4) - 0.055;
+    float3 result = lerp(srgbLo, srgbHi, step(0.0031308, linearCol));
+    return result;
+}
+
+[numthreads(16, 16, 1)]
+void CSMain (uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint2 texSize;
+    _sourceTex.GetDimensions(texSize.x, texSize.y);
+
+    // Early exit for threads not in texture bounds (just to be sure)
+    int2 coords = dispatchThreadID.xy;
+    if (coords.x >= texSize.x) return;
+    if (coords.x < 0) return;
+    if (coords.y >= texSize.y) return;
+    if (coords.y < 0) return;
+
+    // Setup
+    float3 color = float3(0, 0, 0);
+    float weightSum = 0.0;
+    int kernelLineLength = _blurRadius + 1;
+
+    // Sample neighbors and with Gaussian kernel weight
+    for (int y = -_blurRadius; y <= _blurRadius; y++)
+    {
+        for (int x = -_blurRadius; x <= _blurRadius; x++)
+        {
+            int2 texCoord = coords + int2(x, y);
+            
+            // Out of bounds exit
+            if (texCoord.x < 0 || texCoord.x >= texSize.x ||
+                texCoord.y < 0 || texCoord.y >= texSize.y)  continue;   
+            
+            // Get sample and use it only if high alpha
+            float4 sample = _sourceTex[texCoord];
+            if (sample.w <= 0.1) continue;
+
+            // Get gaussian weight and sum the color and weight
+            float weight = _gaussianKernel[(y + _blurRadius) * kernelLineLength + (x + _blurRadius)];
+            color += sample.rgb * weight;
+            weightSum += weight;
+        }
+    }
+    color = color / weightSum;
+
+    // Output the final pixel
+    if (_sourceTex[coords].a <= 0.1) color = float3(0, 0, 0);
+    color = LinearToSRGB(color);
+    _resultTex[coords] = float4(color, _sourceTex[coords].w);
+}

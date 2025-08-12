@@ -1,1 +1,0 @@
-Unity - Fajtov Project - Normal map compute shader, takes on average between 50-160 ms (based on one param)

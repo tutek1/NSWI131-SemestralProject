@@ -1,0 +1,26 @@
+#include "ShaderUtils.hlsl"
+#pragma kernel CSMain
+
+// Input and output textures
+Texture2D<float4> _sourceTex;
+RWTexture2D<float4> _resultTex;
+Buffer<float> _gaussianKernel;
+
+int _blurRadius;
+
+
+[numthreads(16, 16, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint2 texSize;
+    _sourceTex.GetDimensions(texSize.x, texSize.y);
+
+    // Only draw to pixels in range of texture (just in case check)
+    uint2 coords = id.xy;
+    if (coords.x >= texSize.x) return;
+    if (coords.x < 0) return;
+    if (coords.y >= texSize.y) return;
+    if (coords.y < 0) return;
+
+    GaussianBlurTexture(id, _sourceTex, _resultTex, _gaussianKernel, _blurRadius, true);
+}

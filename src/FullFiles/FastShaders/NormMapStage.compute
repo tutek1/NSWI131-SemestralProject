@@ -1,0 +1,87 @@
+#include "ShaderUtils.hlsl"
+#pragma kernel CSMain
+
+// Input and output textures
+Texture2D<float4> _srcBlurTex;
+Texture2D<float4> _distMapTex;
+RWTexture2D<float4> _resultTex;
+
+int _edgeStrength;
+int _borderStrength;
+int _borderSoften;
+
+[numthreads(16, 16, 1)]
+void CSMain (uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint2 texSize;
+    _srcBlurTex.GetDimensions(texSize.x, texSize.y);
+
+    uint2 coords = uint2(dispatchThreadID.x, dispatchThreadID.y);
+
+    // Only draw to pixels in range of texture (just in case check)
+    if (coords.x >= texSize.x) return;
+    if (coords.x < 0) return;
+    if (coords.y >= texSize.y) return;
+    if (coords.y < 0) return;
+
+    // Check if the pixel is even visible
+    if (_srcBlurTex[coords].a <= 0.01)
+    {
+        _resultTex[coords] = float4(0.5, 0.5, 1, 1);
+        return;
+    } 
+
+    // Bump generation -----------------------------------------------------------------------------
+    float4 heightPixel = _distMapTex[coords];
+    float4 leftHeightPixel = _distMapTex[coords + uint2(-1, 0)];
+    float4 rightHeightPixel = _distMapTex[coords + uint2(1, 0)];
+    float4 downHeightPixel = _distMapTex[coords + uint2(0, -1)];
+    float4 upHeightPixel = _distMapTex[coords + uint2(0, 1)];
+
+    float heightCurr = heightPixel.r;
+    float heightL = 1 - leftHeightPixel.r;
+    float heightR = 1 - rightHeightPixel.r;
+    float heightD = 1 - downHeightPixel.r;
+    float heightU = 1 - upHeightPixel.r;
+
+    // Compute gradients (normal)
+    float distanceX = (heightL - heightR) * _borderStrength * _borderSoften;
+    float distanceY = (heightD - heightU) * _borderStrength * _borderSoften;
+
+    distanceX *= pow(abs(heightCurr), _borderSoften);
+    distanceY *= pow(abs(heightCurr), _borderSoften);
+
+
+    // Emboss generation -----------------------------------------------------------------------------
+    float4 blurPixel = _srcBlurTex[coords];
+    float4 leftBlurPixel = _srcBlurTex[coords + uint2(-1, 0)];
+    float4 rightBlurPixel = _srcBlurTex[coords + uint2(1, 0)];
+    float4 downBlurPixel = _srcBlurTex[coords + uint2(0, -1)];
+    float4 upBlurPixel = _srcBlurTex[coords + uint2(0, 1)];
+
+    float blurCurr = 1 - grayscale(blurPixel.rgb) * blurPixel.a;
+    float blurL = grayscale(leftBlurPixel.rgb);
+    float blurR = grayscale(rightBlurPixel.rgb);
+    float blurD = grayscale(downBlurPixel.rgb);
+    float blurU = grayscale(upBlurPixel.rgb);
+
+    // Compute gradients (normal)
+    float embossX = (blurL - blurR) * blurCurr * _edgeStrength;
+    float embossY = (blurD - blurU) * blurCurr * _edgeStrength;
+
+
+    // Final normal generation -----------------------------------------------------------------------------
+    float normalR = embossX * 0.5 + distanceX * 0.5;
+    float normalG = embossY * 0.5 + distanceY * 0.5;
+    float normalB = 1.0;
+
+    float3 normal = normalize(float3(normalR, normalG, normalB));
+
+    float4 normalColor = float4(
+        normal.x * 0.5 + 0.5,
+        normal.y * 0.5 + 0.5,
+        normal.z * 0.5 + 0.5, 1);
+
+    // Output the final pixel
+    _resultTex[coords] = normalColor;
+}

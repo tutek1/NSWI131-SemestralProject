@@ -1,0 +1,55 @@
+#pragma kernel CSMain
+
+// Input and output textures
+Texture2D<float4> _sourceTex;
+RWTexture2D<float4> _resultTex;
+
+int _distance;
+
+[numthreads(32, 32, 1)]
+void CSMain (uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint2 texSize;
+    _sourceTex.GetDimensions(texSize.x, texSize.y);
+
+    // Only draw to pixels in range of texture (just in case check)
+    if (dispatchThreadID.x >= texSize.x) return;
+    if (dispatchThreadID.x < 0) return;
+    if (dispatchThreadID.y >= texSize.y) return;
+    if (dispatchThreadID.y < 0) return;
+
+    uint2 coords = uint2(dispatchThreadID.x, dispatchThreadID.y);
+    float minDistance = _distance * 10;
+
+    // Loop through the rect of surrounding pixels
+    for (int yRect = - _distance; yRect <= _distance; yRect++)
+    {
+        for (int xRect = - _distance; xRect <= _distance; xRect++)
+        {
+            uint2 currCoords = coords + int2(xRect, yRect);
+
+            // Bounds check
+            if (currCoords.y < 0 || currCoords.y >= texSize.y ||
+                currCoords.x < 0 || currCoords.x >= texSize.x) continue;
+            
+            // Found the edge
+            if (_sourceTex[currCoords].a <= 0.1)
+            {
+                float distance = length(float2(xRect, yRect));
+                if (distance < minDistance)
+                {
+                    minDistance = distance;
+                }
+            }
+        }
+    }
+
+    // Get the distance divider
+    float divider = min(_distance, min(texSize.x, texSize.y));
+
+    // Get the color
+    float heightValue = 1 - clamp(minDistance / divider, 0, 1);
+    float4 heightColor = float4(heightValue, heightValue, heightValue, 1);
+
+    _resultTex[coords] = heightColor;
+}
