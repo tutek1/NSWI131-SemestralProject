@@ -68,18 +68,6 @@ As mentioned above, I chose the `Border Distance` parameter and tested several v
 ### Repeats
 I chose to do only 15 repeats per `Border Distance` value. This is a tradeoff between stable enough results and the time it takes to test it.
 
-```{python}
-
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
 
 # Old Version Testing
 
@@ -96,7 +84,7 @@ x2 <- read_csv('data/old_1024_stages.txt', col_types = 'cnii') %>% mutate(datase
 # Combine into one data frame
 combined_data <- bind_rows(x1, x2)
 
-# Plot
+# Per stage plot
 ggplot(combined_data, aes(x = as.numeric(stage), y = time, color = dataset)) + 
   stat_summary(fun = mean, geom = "line", linewidth = 2) +
   scale_y_continuous(n.breaks = 20) +
@@ -117,6 +105,8 @@ Looking at the graph, we can see a big spike in measured time from the first to 
 Since the stage testing showed the second stage was the problem, I tested the old version on the full range of the `Border Distance` parameter, which altogether took more than an hour.
 
 ```{python}
+library(tidyverse)
+
 # Read both data files
 x1 <- read_csv('data/old_2048.txt', col_types = 'cnii') %>% mutate(dataset = "2048x2048 px")
 x2 <- read_csv('data/old_1024.txt', col_types = 'cnii') %>% mutate(dataset = "1024x1024 px")
@@ -124,7 +114,7 @@ x2 <- read_csv('data/old_1024.txt', col_types = 'cnii') %>% mutate(dataset = "10
 # Combine into one data frame
 combined_data <- bind_rows(x1, x2)
 
-# Plot
+# Full plot
 ggplot(combined_data, aes(x = as.numeric(dist), y = time, color = dataset)) + 
   stat_summary(fun = mean, geom = "line", linewidth = 2) +
   scale_y_continuous(n.breaks = 20) +
@@ -295,10 +285,14 @@ The early exits create a computation amount discrepancy between the `2048x2048 p
 Now with the optimisations listed, we can have a look at how the time measurement went.
 
 
-# Per Stage
-Now that the first and second stages run in parallel, I managed to implement it in such a way that the time after each stage can still be measured. However, this omits the performance gained from the parallelisation of the first two stages. The measurements were again taken after each stage for a fixed `Border Distance = 0.3`.
+## Per Stage
+I implemented the first and second stages so that they can still be measured the same way the old version was, even though they now run in parallel. However, this omits the performance gained from the parallelisation of the first two stages. The measurements were again taken after each stage for a fixed `Border Distance = 0.3`.
+
+### Separate Graphs
 
 ```{python}
+library(tidyverse)
+
 # Read both data files
 x1 <- read_csv('data/opt_2048_stages.txt', col_types = 'cnii') %>% mutate(dataset = "New: 2048x2048 px")
 x2 <- read_csv('data/opt_1024_stages.txt', col_types = 'cnii') %>% mutate(dataset = "New: 1024x1024 px")
@@ -306,7 +300,7 @@ x2 <- read_csv('data/opt_1024_stages.txt', col_types = 'cnii') %>% mutate(datase
 # Combine into one data frame
 combined_data <- bind_rows(x1, x2)
 
-# Plot
+# New plot
 ggplot(combined_data, aes(x = as.numeric(stage), y = time, color = dataset)) + 
   stat_summary(fun = mean, geom = "line", linewidth = 2) +
   scale_y_continuous(n.breaks = 21) +
@@ -319,6 +313,7 @@ ggplot(combined_data, aes(x = as.numeric(stage), y = time, color = dataset)) +
     legend.text = element_text(size = 12)
   )
 
+#------------------------------------------------------------------------------
 # Read both data files
 x3 <- read_csv('data/old_2048_stages.txt', col_types = 'cnii') %>% mutate(dataset = "Old: 2048x2048 px")
 x4 <- read_csv('data/old_1024_stages.txt', col_types = 'cnii') %>% mutate(dataset = "Old: 1024x1024 px")
@@ -326,7 +321,7 @@ x4 <- read_csv('data/old_1024_stages.txt', col_types = 'cnii') %>% mutate(datase
 # Combine into one data frame
 combined_data <- bind_rows(x3, x4)
 
-# Plot
+# Old plot
 ggplot(combined_data, aes(x = as.numeric(stage), y = time, color = dataset)) + 
   stat_summary(fun = mean, geom = "line", linewidth = 2) +
   scale_y_continuous(n.breaks = 20) +
@@ -338,11 +333,26 @@ ggplot(combined_data, aes(x = as.numeric(stage), y = time, color = dataset)) +
     legend.title = element_text(size = 14),
     legend.text = element_text(size = 12)
   )
+```
+
+Looking at the two graphs, we can see that the second stage is still the main problem even in the new version of the pipeline. One thing to note is that even though the shape of the plots in both graphs is very similar, the `1024x1024 px` texture plot in the NEW version is closer to the `2048x2048 px` texture plot, meaning the performance hit of the second stage is not as bad, but still very noticeable.
+
+
+### Combined Graph
+
+```{python}
+library(tidyverse)
+
+# Read data files
+x1 <- read_csv('data/opt_2048_stages.txt', col_types = 'cnii') %>% mutate(dataset = "New: 2048x2048 px")
+x2 <- read_csv('data/opt_1024_stages.txt', col_types = 'cnii') %>% mutate(dataset = "New: 1024x1024 px")
+x3 <- read_csv('data/old_2048_stages.txt', col_types = 'cnii') %>% mutate(dataset = "Old: 2048x2048 px")
+x4 <- read_csv('data/old_1024_stages.txt', col_types = 'cnii') %>% mutate(dataset = "Old: 1024x1024 px")
 
 # Combine into one data frame
 combined_data <- bind_rows(x1, x2, x3, x4)
 
-# Plot
+# Combined plot
 ggplot(combined_data, aes(x = as.numeric(stage), y = time, color = dataset)) + 
   stat_summary(fun = mean, geom = "line", linewidth = 2) +
   scale_y_continuous(n.breaks = 20) +
@@ -364,28 +374,52 @@ ggplot(combined_data, aes(x = as.numeric(stage), y = time, color = dataset)) +
   )
 ```
 
-We can see that the second stage is still the main problem even in the new of the pipeline. 
--shape same but lines closer together -> not as huge hit of the second stage
--comparison cool
+This graph compares both versions of the pipeline on all textures. Judging from the graph, the new pipeline is about 5 times faster using the `1024x1024 px` texture and about 10 times faster using the `2048x2048 px` texture. Keep in mind that these times are for a fixed parameter of `Border Distance = 0.3`, and the smaller texture has more empty pixels from which the new pipeline benefits.
 
-```{python}
+
 ## Full Pipeline
-3ššSince the stage testing showed the second stage was the problem, I tested the old version on the full range of the `Border Distance` parameter, which altogether took more than an hour.
-```
+Let's now look at measured times for the full pipeline with a variable parameter of `Border Distance`, like we did in the measurement of the old pipeline. Since the new pipeline is much faster, I managed to measure the whole range of `Border Distance` up to `1.0`, which is the maximum possible value (each pixel looks at the whole texture). This will show us the effect of the second stage more clearly on the new pipeline.
+
+### Separate Graphs
 
 ```{python}
+library(tidyverse)
+
 # Read both data files
-x1 <- read_csv('data/opt_2048.txt', col_types = 'cnii') %>% mutate(dataset = "2048x2048 px")
-x2 <- read_csv('data/opt_1024.txt', col_types = 'cnii') %>% mutate(dataset = "1024x1024 px")
+x1 <- read_csv('data/opt_2048.txt', col_types = 'cnii') %>% mutate(dataset = "New: 2048x2048 px")
+x2 <- read_csv('data/opt_1024.txt', col_types = 'cnii') %>% mutate(dataset = "New: 1024x1024 px")
 
 # Combine into one data frame
 combined_data <- bind_rows(x1, x2)
 
-# Plot
+# New plot
 ggplot(combined_data, aes(x = as.numeric(dist), y = time, color = dataset)) + 
   stat_summary(fun = mean, geom = "line", linewidth = 2) +
-  scale_y_continuous(n.breaks = 20) +
-  labs(title = "Time after each stage", x = "Stages", y = "time [ms]", color = "Dataset") +
+  scale_y_continuous(n.breaks = 21) +
+  scale_x_continuous(n.breaks = 11) +
+  labs(title = "NEW: Time to Generate a Normal Map", x = "Border Distance", y = "time [ms]", color = "Texture") +
+  theme(
+    axis.title = element_text(size = 20), 
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5), 
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+#------------------------------------------------------------------------------
+# Read both data files
+x3 <- read_csv('data/old_2048.txt', col_types = 'cnii') %>% mutate(dataset = "Old: 2048x2048 px")
+x4 <- read_csv('data/old_1024.txt', col_types = 'cnii') %>% mutate(dataset = "Old: 1024x1024 px")
+
+# Combine into one data frame
+combined_data <- bind_rows(x3, x4)
+
+# Old plot
+ggplot(combined_data, aes(x = as.numeric(dist), y = time, color = dataset)) + 
+  stat_summary(fun = mean, geom = "line", linewidth = 2) +
+  scale_y_continuous(n.breaks = 21) +
+  scale_x_continuous(n.breaks = 11) +
+  labs(title = "OLD: Time to Generate a Normal Map", x = "Border Distance", y = "time [ms]", color = "Texture") +
   theme(
     axis.title = element_text(size = 20), 
     plot.title = element_text(size = 20, face = "bold", hjust = 0.5), 
@@ -395,27 +429,124 @@ ggplot(combined_data, aes(x = as.numeric(dist), y = time, color = dataset)) +
   )
 ```
 
-# Overall
-From the analysis of the graph above we can see a big improvement in the real-time usability of the norma
+Comparing the new and old generation times, we can again see the same effect as in the "per stage" graphs, where the plots in the newer version are a bit closer together. This suggests that texture size and `Border Distance` generally have a lower impact on the generation time. However, even in the new version, the plots are polynomial in nature. This is expected, since the logic behind the distance map has remained unchanged.
+
+One thing to note is the flattening of the `2048x2048 px` texture plot in the new version towards the end. My theory is that when the value of `Border Distance` gets above `0.65`, the optimisation of adaptive sampling (sampling every other pixel based on texture size) helps to keep the polynomial characteristic in check. However, I feel like this is not the whole story and some other optimisation, whether one that I implemented or the compiler/GPU made, creates this plateau.
+
+The spike around `Border Distance = 0.65` in the new graph is most likely from me accidentally using the computer for a while during the measurement. I could run the measurement again, but I already spent around 2+ hours running all the measurements.
 
 
-# Other Ideas for Distance Map Calculation
-- downscale texture for the preview
-- JPA or the gpt shit
-- Preprocess all edges then loop only on the edges (could help in bigger textures)
-- Multipass expansion of edges
+## Combined Graph
+
+```{python}
+library(tidyverse)
+
+# Read data files
+x1 <- read_csv('data/opt_2048.txt', col_types = 'cnii') %>% mutate(dataset = "New: 2048x2048 px")
+x2 <- read_csv('data/opt_1024.txt', col_types = 'cnii') %>% mutate(dataset = "New: 1024x1024 px")
+x3 <- read_csv('data/old_2048.txt', col_types = 'cnii') %>% mutate(dataset = "Old: 2048x2048 px")
+x4 <- read_csv('data/old_1024.txt', col_types = 'cnii') %>% mutate(dataset = "Old: 1024x1024 px")
+
+# Combine into one data frame
+combined_data <- bind_rows(x1, x2, x3, x4)
+
+# Compare plot
+cmp_plot <- ggplot(combined_data, aes(x = as.numeric(dist), y = time, color = dataset)) + 
+  stat_summary(fun = mean, geom = "line", linewidth = 2) +
+  scale_y_continuous(n.breaks = 20) +
+  scale_color_manual(
+        values = c(
+          "New: 2048x2048 px" = "#00EE00",
+          "New: 1024x1024 px" = "#00AA00",
+          "Old: 2048x2048 px" = "#EE0000",
+          "Old: 1024x1024 px" = "#AA0000"
+        )
+      ) +
+  labs(title = "COMPARE: Time to Generate a Normal Map", x = "Border Distance", y = "time [ms]", color = "Version: Texture") +
+  theme(
+    axis.title = element_text(size = 20), 
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5), 
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+cmp_plot
+
+#------------------------------------------------------------------------------
+# Zoomed compare plot
+cmp_plot +
+  coord_cartesian(xlim = c(0, 0.2), ylim = c(0, 8000))+
+  labs(title = "ZOOM COMPARE: Time to Generate a Normal Map") +
+  theme(plot.title = element_text(size = 15, face = "bold", hjust = 0.5))
+
+#------------------------------------------------------------------------------
+# Calculate mean times
+means <- combined_data %>%
+  group_by(dist, dataset) %>%
+  summarise(mean_time = mean(time), .groups = 'drop')
+
+# Make wide for speed-up calculation
+speedup <- means %>%
+  pivot_wider(names_from = dataset, values_from = mean_time) %>%
+  transmute(
+    dist = as.numeric(dist),
+    `Speedup: 2048x2048` = `Old: 2048x2048 px` / `New: 2048x2048 px`,
+    `Speedup: 1024x1024` = `Old: 1024x1024 px` / `New: 1024x1024 px`
+  )
+
+# Since the new version has measurements for `Border Distance` > 0.5
+speedup_filtered <- speedup %>%
+  filter(dist <= 0.5) %>%
+  drop_na()
+
+# Plot the speed-up graph
+ggplot(speedup_filtered, aes(x = dist)) +
+  geom_line(aes(y = `Speedup: 2048x2048`, color = "2048x2048 px"), linewidth = 2) +
+  geom_line(aes(y = `Speedup: 1024x1024`, color = "1024x1024 px"), linewidth = 2) +
+  scale_y_continuous(n.breaks = 12) +
+  scale_color_manual(
+    values = c(
+      "2048x2048 px" = "#3333FF",
+      "1024x1024 px" = "#00AAFF"
+    )
+  ) +
+  labs(title = "Speed-Up: Old version vs New version", x = "Border Distance", y = "Speed-Up (Old/New)", , color = "Texture") +
+  theme(
+    axis.title = element_text(size = 20),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  coord_cartesian(xlim = c(0, 0.5), ylim = c(0, 14))
+```
+
+From the analysis of the first graph above, we can see a big improvement in the real-time usability of the normal map generator. It is even possible to use the tool for `Border Distance` higher than `0.5` without waiting more than a minute.
+
+The second graph shows a zoomed version of the first one, so we can see the beginning part more clearly. An interesting thing to note here is that the `2048x2048 px` optimised version is almost as fast as the `1024x1024 px` version and even faster for `Border Distance` lower than `0.05`.
+
+The measured speed-up on the third graph for the `2048x2048 px` texture ranges from ~7 to ~13.5 times. The speed-up is not very stable and often dips and peaks, but grows steadily. In my opinion, this is due to the low number of repetitions and the long time it takes to measure the old version, which contributes to the instability due to possible system interruptions, other programs running, etc.
+
+The speed-up for the `1024x1024 px` texture hangs around 5-6 times and does not grow with `Border Distance`. I think this is due to most of the optimisation being done in the distance map calculation, whose compute time does not grow as rapidly as for the `1024x1024 px` texture. Moreover, in these lower generation times, the overhead of dispatching a compute shader and copying textures from CPU to GPU is more noticeable and unavoidable.
+
+
+# Summary
+The performance experiment showed that the limits of the normal map generation pipeline were in the second stage during the distance map calculation. The optimisations done to the normal map generation pipeline were successful and, in the best case, they show around 13 times speed-up and, in the worst case, a 5 times speed-up.
+
+While the pipeline is still not perfect, I am quite happy with the speed-up the pipeline achieved. Thanks to the measurements and plots I made, I was able to easily detect bottlenecks and curiosities such as the measured time plateauing above `Border Distance = 0.65` in the new version.
+
+## Other Ideas for Distance Map Calculation
+- One quality of life improvement could be to downscale the texture for generating the preview to `512x512 px` for easy tweaking. Then, during the generation of all normal maps for the sprites of the animations, the user would still have to wait the full time.
+- The distance map calculation could first preprocess the texture and save all the edge pixels to a buffer. Then, during the calculation, we could only loop through all the edge pixels. This could further help the performance, but sprites with a lot of "holes" (`alpha=0` pixels) could perform worse.
+- I could use a smarter distance map calculation algorithm instead of the simple brute-force "loop over a square" method. I found that I could use the Jump Flooding Algorithm (JFA) or vector propagation algorithms, which would allow me to find the nearest empty pixel in as little as $O(log\ n)$.
+- The last thing I thought of is to use a multipass shader. Each pass would expand the edge pixels inwards by one pixel. However, for large textures and big `Border Distance` values, I would need hundreds of passes, and the distance map would need to be synchronised between every pass. Synchronisation could be done by having each pass be a dispatch, but I think that this would perform even worse than the old version due to the overhead from the numerous dispatches.
+
+I may implement, run measurements, and plot some of these ideas in the future. Luckily, it will be easy since I already have this notebook with graphs and measured data to compare it to, plus the testing scripts in Unity.
 
 
 # AI Disclaimer
 In this performance evaluation experiment, I used AI for:
-- Normal map code debugging and iterating on optimisation ideas
-- Tweaking the R code for graphs
-- Grammarly (not sure if it uses AI)
-
-```{python}
-
-```
-
-```{python}
-
-```
+- Normal map generation code debugging and iterating on optimisation ideas.
+- Tweaking the R code for graphs.
+- Grammarly for spell checking (not sure if it uses AI).
